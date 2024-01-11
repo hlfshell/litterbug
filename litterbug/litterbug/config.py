@@ -128,7 +128,8 @@ class LitterbugConfig:
 
         return matches
 
-    def FromYAML(self, filepath: str) -> LitterbugConfig:
+    @staticmethod
+    def From_YAML(self, filepath: str) -> LitterbugConfig:
         """
         Read a CSV file and create a config with its attributes
         """
@@ -138,7 +139,7 @@ class LitterbugConfig:
 
         return LitterbugConfig(attributes)
 
-    def ToYAML(self, filepath: str) -> None:
+    def to_yaml(self, filepath: str) -> None:
         """
         Write a CSV file with the config's attributes
         """

@@ -106,23 +106,34 @@ class LitterbugConfig:
         inserts = [a + c + b for a, b in splits for c in alphabet]
         edits = set(deletes + transposes + replaces + inserts)
 
-        # Create a list of all keys
+        # We now generate every possible key with "." being a
+        # delimiter to a further nesting of dicts
         keys = []
-        dicts: Dict[str, Dict[str, Any]] = {"": self.attributes}
-        current_key = ""
+        dicts: Dict[str, Dict[str, Dict]] = {"": self.attributes}
+
         while len(dicts) > 0:
-            current_key = dicts.keys()[0]
+            current_key = list(dicts.keys())[0]
             current = dicts[current_key]
             del dicts[current_key]
+
+            if type(current) is not dict:
+                keys.append(current_key)
+                continue
+
             for key in current.keys():
-                if type(current[key]) is dict:
-                    dicts = current[key]
+                if current_key == "":
+                    appended_key = key
                 else:
-                    keys.append(f"{current_key}.{key}")
+                    appended_key = f"{current_key}.{key}"
+
+                if type(current[key]) is dict:
+                    dicts[appended_key] = current[key]
+
+                keys.append(appended_key)
 
         # Determine which words if any match the edits
         matches = []
-        for word in self.attributes.keys():
+        for word in keys:
             if word in edits:
                 matches.append(word)
 

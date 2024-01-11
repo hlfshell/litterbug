@@ -24,8 +24,8 @@ map:
   # map file has this added to it (IE its created from)
   # our helper class) this will be ignored.
   offset:
-    x: 0.0
-    y: 0.0
+    - 0.0 # x
+    - 0.0 # y
 
 interaction:
   # How far away the robot can interact with objects
@@ -44,8 +44,12 @@ interaction:
 vision:
   # Whether or not litterbug will simulate mocked vision
   enable_simulation: False
-  # Range how far can the sensor see, in meters
+  # Range is how far can the sensor see, in meters, from the
+  # centroid of the robot (it's (x,y) coordinate).
+  # minimum_range is the same
   range: 8.0
+  minimum_range: 0.5
+
 
   # Error is the purposely introduced x/y/z error (in meters)
   # for broadcasted position, to be more realistic. The error
@@ -85,9 +89,8 @@ vision:
   # There are two types of false positives - ghost positives
   # (no object is spotted) and we broadcast anyway, and 
   # mislabels, where we on some probability incorrectly
-  # label an object. If a mislabel is occurring, the ghost
-  # positive is not broadcasted. Otherwise, ghost positive
-  # has some low probability of occurring.
+  # label an object. Either can occur at any time as per
+  # the real life vision models we're aiming to simulate.
   # Ghost positives are broadcasted at a distribution of
   # time based on how often you would like them broadcasted,
   # at a an expected rating of approximate time between in
@@ -121,6 +124,9 @@ vision:
 
 
 gazebo:
+  # service_name is the ROS2 service name the resulting
+  # node for the litterbug_gazebo control node will have
+  service_name: "litterbug_gazebo"
   # A list of all directories where models are expected
   # to exist. These are checked on startup
   models_directories:

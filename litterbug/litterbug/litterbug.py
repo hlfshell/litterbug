@@ -10,7 +10,7 @@ from litterbug.gazebo import Gazebo
 from litterbug.litterbug.items import Item
 from litterbug.map import Map
 
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 from random import random, choice, uniform
 
 
@@ -24,6 +24,7 @@ class Litterbug(Node):
         config: LitterbugConfig,
         map: Optional[Map] = None,
         gazebo: Optional[Gazebo] = None,
+        on_item_detected: Callable[Item, None] = None,
     ):
         self.__config = config
 
@@ -201,15 +202,20 @@ class Litterbug(Node):
                     # Determine the orientation of the robot and add
                     # some random ±fov (convert it to radians!) to it
                     fov = math.radians(self.__fov)
-                    # We need to handle the case where we're close to
-                    # and thus overshoot 0/2π
-                    uniform(orientation - fov, orientation + fov)
-                    DOABOVE
+                    angle = uniform(-fov, fov)
+
                     # Generate some distance away from the robot to trigger
                     # our false positive on
                     distance = uniform(self.__vision_minimum_range, self.__vision_range)
 
-                    if not self.__map.line_of_sight(location, (x, y)):
+                    # Now find the coordinates of a line at the set distance
+                    # at the angle we generated
+                    spot = (
+                        location[0] + distance * math.cos(orientation + angle),
+                        location[1] + distance * math.sin(orientation + angle),
+                    )
+
+                    if not self.__map.line_of_sight(location, spot):
                         continue
                     else:
                         # Create a fake Item for our false positive
@@ -217,7 +223,7 @@ class Litterbug(Node):
                             name="",
                             label=item_type,
                             model="",
-                            origin=location,
+                            origin=spot,
                             orientation=orientation,
                         )
                         to_broadcast.append(item)
@@ -228,8 +234,21 @@ class Litterbug(Node):
                 break
 
         # We now have a list of items we wish to broadcast. For each
-        # we create a broadcast message and do so
+        # we create a broadcast message and do so. If we have a function
+        # assigned to __on_item_detected, we will call that too
         # TODO - make it injectable via a func too?
+        for item in to_broadcast:
+            if self.__on_item_detected is not None:
+                self.__on_item_detected(item)
+            else:
+                self.__broadcast_item_spotted(item)
+    
+    def __broadcast_item_spotted(self, item: Item):
+        """
+        __broadcast_item_spotted will broadcast a ObjectSpotted ROS message
+        to the ROS2 topic to all possible subscribers.
+        """
+        self.__???
 
     def __quaternion_to_euler(self, x, y, z, w) -> Tuple[float, float, float]:
         """

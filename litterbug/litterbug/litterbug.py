@@ -63,6 +63,7 @@ class Litterbug(Node):
 
         # If we are simulating the vision, prepare it
         if config["vision.enable_simulation"]:
+            self.__on_item_detected = on_item_detected
             self.__initiate_vision()
 
     def __initiate_vision(self):
@@ -138,7 +139,10 @@ class Litterbug(Node):
         """
         vision_scan will, at a set FPS, perform simulated vision.
         It will also handle false negative and positive emulation
-        if configured to do so.
+        if configured to do so. Once items are identified, an
+        ObjectSpotted ROS msg will be spawn to broadcast the item
+        or call it out to the custom function passed to litterbug
+        via the on_item_detected parameter.
         """
 
         location, orientation = self.get_robot_pose()
@@ -151,8 +155,8 @@ class Litterbug(Node):
         for item in items:
             seen = self.__map.line_of_sight(location, item.origin)
 
-            # If we saw it, figure out the probability
-            # that we will false negative it
+            # If we saw it, figure out the probability that we will
+            # false negative it if enabled
             if seen and self.__enable_false_negatives:
                 if random() < self.__false_negative_probability:
                     continue
@@ -176,79 +180,94 @@ class Litterbug(Node):
                     to_broadcast.append(item)
                 else:
                     to_broadcast.append(item)
+            elif seen:
+                to_broadcast.append(item)
 
         # Now, if we are going to send false positives, we will
-        # see if we're doing so here
+        # see if we generate some now
         if self.__enable_false_positives and self.__ghost_positive_probability > 0.0:
-            # We do the loop this way to possibly create multiple
-            # false positives if the math calls for it.
-            while True:
-                if self.__mislabel_probability > random():
-                    break
+            ghost_positives = self.__ghost_positives()
+            to_broadcast += ghost_positives
 
-                # We are going to send a false positive of an item
-                # that is not there at all.
-                # Pick a random item to represent
-                item_type = choice(self.get_item_types())
-
-                # Determine a realistic location for this item to
-                # exist by generating a random point and ensuring
-                # via the Map it's viewable. We limit generation
-                # to 25 possible tries before abandoning the process
-                # in case we're in a position where we're close to
-                # a wall and can't really detect much
-                attempts = 0
-                while attempts < 25:
-                    # Determine the orientation of the robot and add
-                    # some random ±fov (convert it to radians!) to it
-                    fov = math.radians(self.__fov)
-                    angle = uniform(-fov, fov)
-
-                    # Generate some distance away from the robot to trigger
-                    # our false positive on
-                    distance = uniform(self.__vision_minimum_range, self.__vision_range)
-
-                    # Now find the coordinates of a line at the set distance
-                    # at the angle we generated
-                    spot = (
-                        location[0] + distance * math.cos(orientation + angle),
-                        location[1] + distance * math.sin(orientation + angle),
-                    )
-
-                    if not self.__map.line_of_sight(location, spot):
-                        continue
-                    else:
-                        # Create a fake Item for our false positive
-                        item = Item(
-                            name="",
-                            label=item_type,
-                            model="",
-                            origin=spot,
-                            orientation=orientation,
-                        )
-                        to_broadcast.append(item)
-                        break
-
-                # If we've reached this point, we failed to generate
-                # a false positive and will abort
-                break
-
-        # We now have a list of items we wish to broadcast. For each
-        # we create a broadcast message and do so. If we have a function
-        # assigned to __on_item_detected, we will call that too
-        # TODO - make it injectable via a func too?
+        # We now have a list of items we wish to broadcast. If we
+        # have a function assigned to __on_item_detected, we will
+        # call that; otherwise it's just broadcasted to our ROS2
+        # topic
         for item in to_broadcast:
             if self.__on_item_detected is not None:
                 self.__on_item_detected(item)
             else:
                 self.__broadcast_item_spotted(item)
     
+    def __ghost_positives(self) -> List[Item]:
+        """
+        Given the current robot's position and the configuration
+        of false negative probabilities (vision.ghost_positive_rate)
+        possibly generate a set of false positives.
+        """
+        location, orientation = self.get_robot_pose()
+
+        # We do a while loop this way to possibly create multiple
+        # false positives if the math/die rolls call for it.
+        while True:
+            if self.__mislabel_probability > random():
+                break
+
+            # We are going to send a false positive of an item
+            # that is not there at all.
+            # Pick a random item to represent
+            item_type = choice(self.get_item_types())
+
+            # Determine a realistic location for this item to
+            # exist by generating a random point and ensuring
+            # via the Map it's viewable. We limit generation
+            # to 25 possible tries before abandoning the process
+            # in case we're in a position where we're close to
+            # a wall and can't really detect much
+            attempts = 0
+            while attempts < 25:
+                # Determine the orientation of the robot and add
+                # some random ±fov (convert it to radians!) to it
+                fov = math.radians(self.__fov)
+                angle = uniform(-fov, fov)
+
+                # Generate some distance away from the robot to trigger
+                # our false positive on
+                distance = uniform(self.__vision_minimum_range, self.__vision_range)
+
+                # Now find the coordinates of a line at the set distance
+                # at the angle we generated
+                spot = (
+                    location[0] + distance * math.cos(orientation + angle),
+                    location[1] + distance * math.sin(orientation + angle),
+                )
+
+                if not self.__map.line_of_sight(location, spot):
+                    continue
+                else:
+                    # Create a fake Item for our false positive
+                    item = Item(
+                        name="",
+                        label=item_type,
+                        model="",
+                        origin=spot,
+                        orientation=orientation,
+                    )
+                    to_broadcast.append(item)
+                    break
+
+            # If we've reached this point, we failed to generate
+            # a false positive and will abort
+            break
+
     def __broadcast_item_spotted(self, item: Item):
         """
         __broadcast_item_spotted will broadcast a ObjectSpotted ROS message
         to the ROS2 topic to all possible subscribers.
         """
         self.__???
+        TODO - get the message generated and created here for
+        broadcast also create the broadcast topic
 
     def __quaternion_to_euler(self, x, y, z, w) -> Tuple[float, float, float]:
         """
@@ -269,7 +288,11 @@ class Litterbug(Node):
 
     def __odom_callback(self, msg: Odometry):
         """
-        TODO
+        __odom_callback receives the incoming Odometry message
+        and saves it to memory in a thread safe manner. We
+        convert the quaternion rotation to Euler angles before
+        isolating psi (z-axis rotation) for the robot's resulting
+        orientation.
         """
         pose = msg.pose.pose
         position = pose.position

@@ -206,6 +206,8 @@ class Litterbug(Node):
         possibly generate a set of false positives.
         """
         location, orientation = self.get_robot_pose()
+        
+        to_broadcast : List[Item] = []
 
         # We do a while loop this way to possibly create multiple
         # false positives if the math/die rolls call for it.

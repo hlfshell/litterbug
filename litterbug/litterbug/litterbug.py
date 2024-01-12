@@ -24,7 +24,7 @@ class Litterbug(Node):
         config: LitterbugConfig,
         map: Optional[Map] = None,
         gazebo: Optional[Gazebo] = None,
-        on_item_detected: Callable[Item, None] = None,
+        on_item_detected: Callable[[Item], None] = None,
     ):
         self.__config = config
 
